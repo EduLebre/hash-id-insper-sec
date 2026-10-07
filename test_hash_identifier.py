@@ -64,13 +64,33 @@ no topo do ranking.
 #   - `PREFIX_RULES` — a tabela de busca de prefixos (usada pelo teste
 #                      parametrizado "every row is covered" no final deste arquivo)
 
+# Biblioteca padrão: valida que a saída `--json` pode ser interpretada como JSON.
+import json
+
 # Terceiros: o próprio executor de testes. Também precisamos importá-lo aqui
 # para podermos usar seu decorador `@pytest.mark.parametrize` abaixo.
 import pytest
 
 # Local: nosso próprio módulo. Extraímos as peças públicas sob teste —
 # a tabela de regras de prefixo, a dataclass de resultado e a função de entrada.
-from hash_identifier import PREFIX_RULES, HashCandidate, identify
+from hash_identifier import PREFIX_RULES, HashCandidate, identify, main
+
+
+def test_json_output_is_valid_and_contains_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A flag --json produz um documento válido com a entrada e os candidatos."""
+    sample = "5f4dcc3b5aa765d61d8327deb882cf99"
+    monkeypatch.setattr("sys.argv", ["hashid", "--json", sample])
+
+    exit_code = main()
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["input"] == sample
+    assert payload["candidates"][0]["algorithm"] == "MD5"
+    assert payload["candidates"][0]["confidence"] == "medium"
 
 # =============================================================================
 # Correspondências de prefixo (alta confiança)

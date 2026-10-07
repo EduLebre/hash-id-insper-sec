@@ -56,13 +56,16 @@ O que este arquivo expõe
 # objeto amigável para não termos que fatiar `sys.argv` manualmente.
 import argparse
 
+# Biblioteca padrão: serializa a saída estruturada do modo `--json`.
+import json
+
 # Biblioteca padrão: acesso a internos do interpretador — usamos para
 # escrever no stderr e sair do processo com um código de status específico.
 import sys
 
 # Biblioteca padrão: um decorador que transforma uma classe em um registro de
 # dados pequeno e imutável sem escrever código repetitivo de `__init__`.
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 # Biblioteca padrão: uma dica de tipo que fixa um valor a um pequeno conjunto
 # fixo de strings (aqui: "high", "medium", "low"). O Mypy captura erros de digitação.
@@ -470,6 +473,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         default=5,
         help="Mostra no máximo este número de candidatos (padrão: 5).",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Imprime a entrada e os candidatos como JSON, sem tabela colorida.",
+    )
     return parser
 
 
@@ -526,6 +534,15 @@ def main() -> int:
 
     # Limita aos top-N solicitados
     trimmed = candidates[: args.top]
+
+    if args.json:
+        payload = {
+            "input": args.hash.strip(),
+            "candidates": [asdict(candidate) for candidate in trimmed],
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
     _render_table(args.hash, trimmed, console)
 
     # Dica útil — direciona o usuário para o cracker após a identificação.
