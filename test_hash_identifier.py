@@ -388,6 +388,24 @@ def test_base64_blob_is_called_out_as_not_a_hash() -> None:
     assert "Base64" in candidates[0].algorithm
 
 
+def test_atlassian_pbkdf2_prefix_is_recognized() -> None:
+    """O prefixo legado da Atlassian identifica PBKDF2-SHA1 com confiança alta."""
+    candidates = identify("$pbkdf2$iteracoes$salt$hash")
+
+    assert candidates
+    assert candidates[0].algorithm == "PBKDF2-SHA1 (Atlassian)"
+    assert candidates[0].confidence == "high"
+
+
+def test_tiger128_length_returns_tiger128() -> None:
+    """Uma entrada hexadecimal de 24 caracteres identifica Tiger-128."""
+    candidates = identify("0123456789abcdef01234567")
+
+    assert candidates
+    assert candidates[0].algorithm == "Tiger-128"
+    assert candidates[0].confidence == "medium"
+
+
 # =============================================================================
 # HashCandidate é imutável
 # =============================================================================

@@ -157,6 +157,8 @@ PREFIX_RULES: list[tuple[str, str, str]] = [
     ("$S$", "Drupal 7 (SHA-512)", "hash estilo PHC do Drupal 7"),
     # scrypt como algumas implementações o codificam
     ("$7$", "scrypt", "hash estilo PHC scrypt"),
+    # PBKDF2-SHA1 legado usado por produtos Atlassian, como Jira
+    ("$pbkdf2$", "PBKDF2-SHA1 (Atlassian)", "hash legado do Atlassian / Jira"),
     # Padrão do Django — reconhecível pelo nome do algoritmo no prefixo
     ("pbkdf2_sha256$", "Django PBKDF2-SHA256", "hash de senha padrão do Django"),
     ("pbkdf2_sha1$", "Django PBKDF2-SHA1", "hash de senha legado do Django"),
@@ -191,6 +193,8 @@ _HEX_UPPER_CHARSET: frozenset[str] = frozenset("0123456789ABCDEF")
 HEX_LENGTH_RULES: dict[int, list[str]] = {
     # 16 caracteres hex = 8 bytes = 64 bits. Saída do OLD_PASSWORD() do MySQL.
     16: ["MySQL323", "CRC-64"],
+    # 24 caracteres hex = 12 bytes = 96 bits. Inclui variantes truncadas do Tiger.
+    24: ["Tiger-128"],
     # 32 caracteres hex = 16 bytes = 128 bits
     32: ["MD5", "NTLM", "MD4", "RIPEMD-128"],
     # 40 caracteres hex = 20 bytes = 160 bits
