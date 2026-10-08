@@ -11,11 +11,11 @@ _Esta é uma visão geral rápida — teoria de segurança, arquitetura e tutori
 > [!NOTE]
 > Esta ferramenta foi desenvolvida para alguém que nunca escreveu Python antes. O código-fonte é amplamente comentado como material de apoio ao aprendizado, a pasta `learn/` explica cada conceito do zero, e toda a ferramenta consiste em um único arquivo legível.
 
-## 🎯 Objective
+## 🎯 Objetivo
 
 Construir uma ferramenta de linha de comando que identifica o algoritmo de hash de uma string com base em padrões observáveis (prefixo, comprimento, conjunto de caracteres), retornando candidatos classificados com níveis de confiança.
 
-## 🧠 Learning Outcomes
+## 🧠 Aprendizados
 
 - O que são hashes e por que não são criptografia reversível
 - Como identificar algoritmos por formato, comprimento e prefixo
@@ -23,7 +23,7 @@ Construir uma ferramenta de linha de comando que identifica o algoritmo de hash 
 - Fundamentos de Python: funções puras, tipagem, testes, CLI
 - Como estruturar um pipeline de decisão em camadas
 
-## � Caso tenha dificuldades com a base do projeto
+## 📘 Caso tenha dificuldades com a base do projeto
 
 > [!NOTE]
 > Este projeto ensina Python do zero nos módulos `learn/`. Se você empacar na base, estes recursos rápidos ajudam a recuperar o fluxo.
@@ -32,79 +32,64 @@ Construir uma ferramenta de linha de comando que identifica o algoritmo de hash 
 - [Python Tutorial for Beginners — freeCodeCamp.org](https://www.youtube.com/watch?v=rfscVS0vtbw) — introdução prática a Python
 - [Hash algorithms — Computerphile](https://youtu.be/b4b8ktEV4Bg?si=4KDOBMfntwpbWxkw) — entenda hashes em 10 minutos
 
-## 🛠️ Scope
+## 🛠️ Funcionalidades
 
-### MVP
+- Identificação por prefixo, comprimento e conjunto de caracteres
+- Lista de candidatos com confiança e motivo da identificação
+- Saída em tabela ou JSON
+- Leitura de um hash, de um arquivo ou do `stdin`
+- Cache durante o processamento de entradas repetidas em lote
+- Sugestão do modo correspondente do Hashcat
+- Estimativa de dificuldade de quebra
+- Reconhecimento de URL, JWT, Base32, Base58, Base64 e hexadecimal com `0x`
 
-- **Desafios Nível 1 (1.1–1.3):** adicionar uma regra de prefixo, adicionar uma regra por comprimento hexadecimal e criar a saída `--json`.
-- **Desafios Nível 2 (2.1–2.3):** entrada por arquivo/stdin, dicas de modo do hashcat e reconhecimento de entradas que não são hashes.
-- Manter a identificação dos formatos existentes, os níveis de confiança e a justificativa funcionando enquanto esses desafios são implementados.
-- Demonstrar cada desafio com testes automatizados e uma execução da CLI.
+## ✅ Estado atual
 
-### Stretch
+- [x] 66 testes automatizados passando
+- [x] Ruff e Mypy sem erros
+- [x] Pylint com nota 10/10
+- [x] Execução individual, por arquivo e por `stdin`
+- [x] Códigos de saída adequados para uso em scripts
 
-- **Nível 3 (3.1–3.3):** identificação de múltiplos hashes, pontuação de confiança e estimativa de dificuldade de quebra.
-- **Nível 4 (4.1–4.3):** análise de dump real, comparação com ferramentas existentes e hook de `pre-commit`.
-
-### Conquer
-
-- **Nível 5 (5.1–5.2):** documentar as limitações estruturais do identificador e construir um classificador probabilístico com ML.
-
-## ✅ Definition of Done
-
-- [ ] `just test` passa (mais de 30 testes)
-- [ ] `just lint` passa (ruff + mypy --strict + pylint)
-- [ ] `just run -- <hash>` identifica corretamente os hashes de demonstração
-- [ ] Códigos de saída corretos para scripts de shell
-
-## 🧪 Validation
+## 🧪 Validação
 
 ```bash
-just test       # executa o pytest (mais de 30 testes)
+just test       # executa o pytest
 just lint       # ruff + mypy --strict + pylint
 just run -- 5f4dcc3b5aa765d61d8327deb882cf99
-# ✔ MD5 (medium) — 32 caracteres hexadecimais, candidato mais provável para este comprimento
+# MD5 | modo 0 | trivial | confiança medium
 ```
 
 Teste com os [hashes de demonstração](#hashes-de-demonstração) abaixo.
 
 ## 🎬 Demo
 
-Execute a ferramenta com os hashes de demonstração e explique:
+O roteiro, os casos escolhidos e os resultados estão em [DEMO.md](DEMO.md).
 
-- Como cada hash foi identificado (prefixo, comprimento, formato)
-- Por que alguns candidatos têm confiança `high` e outros `medium`/`low`
-- O que a ferramenta **não** consegue concluir com certeza
+## 🚀 Instalação e execução
 
-## 🚀 Getting Started
-
-Dentro de `projects/Individual/a-Hash_ID/`:
+Na raiz do projeto, instale as dependências:
 
 ```bash
-sudo apt update
-wget -qO- https://astral.sh/uv/install.sh | sh
-uv venv --python 3.14
-source .venv/bin/activate
-./install.sh
-just run -- 5f4dcc3b5aa765d61d8327deb882cf99
+uv sync --all-extras
+uv run hashid 5f4dcc3b5aa765d61d8327deb882cf99
 ```
+
+Se o ambiente virtual já estiver ativado, use diretamente `hashid`.
 
 > [!TIP]
 > Este projeto utiliza o [`just`](https://github.com/casey/just) como executor de comandos. Digite `just` para ver todos os comandos disponíveis.
->
-> Instalação: `curl -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin`
 
 ## Hashes de Demonstração
 
-| Hash                                                                          | Detectado como   | Motivo                             |
-| ----------------------------------------------------------------------------- | ---------------- | ---------------------------------- |
-| `5f4dcc3b5aa765d61d8327deb882cf99`                                            | MD5              | 32 caracteres hexadecimais         |
-| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`            | SHA-256          | 64 caracteres hexadecimais         |
-| `$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQNQy.uK4Of2T7G.VHvgvWK`              | bcrypt           | prefixo `$2b$`                     |
-| `$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG` | Argon2id         | prefixo `$argon2id$`               |
-| `$apr1$JlOdSlVe$ipa1mTAv3LFRBHHzqaIaH/`                                       | Apache MD5-crypt | prefixo `$apr1$`                   |
-| `*A4B6157319038724E3560894F7F932C8886EBFCF`                                   | MySQL5           | começa com `*` + 40 hex maiúsculos |
-| `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgN...`  | JWT (não é hash) | prefixo `eyJ` = base64 de `{"`     |
+| Entrada                                                                       | Resultado        | Hashcat | Dificuldade |
+| ----------------------------------------------------------------------------- | ---------------- | ------- | ----------- |
+| `5f4dcc3b5aa765d61d8327deb882cf99`                                            | MD5              | 0       | trivial     |
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`            | SHA-256          | 1400    | trivial     |
+| `$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQNQy.uK4Of2T7G.VHvgvWK`              | bcrypt           | 3200    | hard        |
+| `$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG` | Argon2id         | —       | very_hard   |
+| `$apr1$JlOdSlVe$ipa1mTAv3LFRBHHzqaIaH/`                                       | Apache MD5-crypt | 1600    | moderate    |
+| `https://insper.edu.br/`                                                      | URL, não é hash  | —       | —           |
 
 > [!IMPORTANT]
 > Sempre envolva hashes que começam com `$` em **aspas simples**. Sem as aspas, seu shell tentará expandir `$2`, `$P$`, `$1$` etc. como variáveis de shell.
@@ -117,17 +102,26 @@ just test       # executa o pytest
 just lint       # ruff + mypy --strict + pylint
 just format     # yapf
 just run -- <h> # identifica um hash
+
+hashid --json <hash>        # saída estruturada
+hashid --file hashes.txt    # uma entrada por linha
+```
+
+No PowerShell, também é possível usar o `stdin`:
+
+```powershell
+Get-Content .\hashes.txt | hashid
 ```
 
 ## Requisitos
 
-- **Python 3.14+** — o script de instalação fará a verificação.
+- **Python 3.13+**
 - [`uv`](https://github.com/astral-sh/uv) — gerenciador moderno de pacotes para Python.
-- [`just`](https://github.com/casey/just) — executor de comandos.
+- [`just`](https://github.com/casey/just) — usado nos comandos de validação.
 
 Nenhum compilador, biblioteca de sistema ou acesso à rede é necessário.
 
-## 📚 Learning Resources
+## 📚 Material de apoio
 
 | Módulo                                          | Tópico                                                             |
 | ----------------------------------------------- | ------------------------------------------------------------------ |
@@ -149,9 +143,10 @@ A identificação é baseada no formato da entrada e pode retornar mais de um
 candidato. Veja as [limitações conhecidas](docs/limitations.md) para entender os
 casos em que não é possível determinar o algoritmo com certeza.
 
-## 🧭 Next Step
+## 🧭 Próximos passos
 
-Após concluir `Hash_ID`, você pode avançar para o projeto em equipe do mesmo ramo: [`Hash_Cracker`](../../Team/Hash_Cracker/README.md) — quebra de hashes com ataques de dicionário, brute force e regras.
+A evolução natural deste projeto é o `Hash_Cracker`, que recebe um formato já
+identificado e testa possíveis senhas com ataques de dicionário ou força bruta.
 
 > [!NOTE]
 > **Não é obrigatório** avançar para o próximo projeto imediatamente. Você pode fazer múltiplos projetos primários em paralelo, respeitando as janelas de entrega do calendário.
