@@ -91,6 +91,7 @@ from rich.table import Table
 # Literals para conjuntos fixos pequenos.
 
 Confidence = Literal["high", "medium", "low"]
+CrackDifficulty = Literal["trivial", "moderate", "hard", "very_hard"]
 
 
 # Nome usado pelo identificador -> modo numérico aceito pelo hashcat.
@@ -127,6 +128,59 @@ HASHCAT_MODES: dict[str, int] = {
     "BLAKE2s-256": 31000,
 }
 
+# Estimativa qualitativa para ataques de adivinhação de senha. Ela considera
+# principalmente o custo do algoritmo, não a força da senha nem o hardware usado.
+CRACK_DIFFICULTIES: dict[str, CrackDifficulty] = {
+    "MySQL323": "trivial",
+    "CRC-64": "trivial",
+    "Tiger-128": "trivial",
+    "MD5": "trivial",
+    "NTLM": "trivial",
+    "MD4": "trivial",
+    "RIPEMD-128": "trivial",
+    "SHA-1": "trivial",
+    "RIPEMD-160": "trivial",
+    "Tiger-192": "trivial",
+    "SHA-224": "trivial",
+    "SHA3-224": "trivial",
+    "SHA-256": "trivial",
+    "SHA3-256": "trivial",
+    "BLAKE2s-256": "trivial",
+    "RIPEMD-256": "trivial",
+    "RIPEMD-320": "trivial",
+    "SHA-384": "trivial",
+    "SHA3-384": "trivial",
+    "SHA-512": "trivial",
+    "SHA3-512": "trivial",
+    "BLAKE2b-512": "trivial",
+    "Whirlpool": "trivial",
+    "MySQL5": "trivial",
+    "DES crypt": "trivial",
+    "NetNTLMv1": "trivial",
+    "LDAP SHA": "trivial",
+    "LDAP MD5": "trivial",
+    "MD5 crypt": "moderate",
+    "Apache MD5-crypt": "moderate",
+    "phpass": "moderate",
+    "NetNTLMv2": "moderate",
+    "LDAP SSHA": "moderate",
+    "LDAP SMD5": "moderate",
+    "SHA-256 crypt": "moderate",
+    "SHA-512 crypt": "moderate",
+    "bcrypt": "hard",
+    "Drupal 7 (SHA-512)": "hard",
+    "scrypt": "hard",
+    "PBKDF2-SHA1 (Atlassian)": "hard",
+    "Django PBKDF2-SHA256": "hard",
+    "Django PBKDF2-SHA1": "hard",
+    "Django bcrypt-SHA256": "hard",
+    "Argon2id": "very_hard",
+    "Argon2i": "very_hard",
+    "Argon2d": "very_hard",
+    "yescrypt": "very_hard",
+    "Django Argon2": "very_hard",
+}
+
 
 # =============================================================================
 # Tipo de Resultado — o que identify() retorna para cada palpite
@@ -155,12 +209,16 @@ class HashCandidate:
         saída depurável — o usuário pode ver POR QUE cada palpite foi feito.
     hashcat_mode
         Número usado pela opção `-m` do hashcat, quando houver modo conhecido.
+    crack_difficulty
+        Estimativa qualitativa da dificuldade de adivinhar a senha. Fica como
+        `None` para formatos que não são hashes ou algoritmos desconhecidos.
     """
 
     algorithm: str
     confidence: Confidence
     reason: str
     hashcat_mode: int | None = None
+    crack_difficulty: CrackDifficulty | None = None
 
 
 def _candidate(
@@ -174,6 +232,7 @@ def _candidate(
         confidence=confidence,
         reason=reason,
         hashcat_mode=HASHCAT_MODES.get(algorithm),
+        crack_difficulty=CRACK_DIFFICULTIES.get(algorithm),
     )
 
 
@@ -621,6 +680,7 @@ def _render_table(
     )
     table.add_column("algoritmo", style="bold white", no_wrap=True)
     table.add_column("hashcat", no_wrap=True)
+    table.add_column("dificuldade", no_wrap=True)
     table.add_column("confiança", no_wrap=True)
     table.add_column("motivo", style="dim")
 
@@ -635,6 +695,7 @@ def _render_table(
         table.add_row(
             candidate.algorithm,
             str(candidate.hashcat_mode) if candidate.hashcat_mode is not None else "-",
+            candidate.crack_difficulty or "-",
             f"[{color}]{candidate.confidence}[/{color}]",
             candidate.reason,
         )
@@ -651,6 +712,7 @@ def _render_batch(
     table.add_column("entrada", style="bold white")
     table.add_column("algoritmo", style="bold white", no_wrap=True)
     table.add_column("hashcat", no_wrap=True)
+    table.add_column("dificuldade", no_wrap=True)
     table.add_column("confiança", no_wrap=True)
     table.add_column("motivo", style="dim")
 
@@ -667,6 +729,7 @@ def _render_batch(
                 "não identificado",
                 "-",
                 "-",
+                "-",
                 "nenhuma regra correspondeu",
             )
             continue
@@ -679,6 +742,7 @@ def _render_batch(
                 str(candidate.hashcat_mode)
                 if candidate.hashcat_mode is not None
                 else "-",
+                candidate.crack_difficulty or "-",
                 f"[{color}]{candidate.confidence}[/{color}]",
                 candidate.reason,
             )

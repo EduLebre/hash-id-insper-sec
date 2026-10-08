@@ -104,6 +104,7 @@ def test_json_output_is_valid_and_contains_candidates(
     assert payload["candidates"][0]["algorithm"] == "MD5"
     assert payload["candidates"][0]["confidence"] == "medium"
     assert payload["candidates"][0]["hashcat_mode"] == 0
+    assert payload["candidates"][0]["crack_difficulty"] == "trivial"
 
 
 def test_known_hashcat_mode_is_attached_to_candidate() -> None:
@@ -119,6 +120,32 @@ def test_unknown_hashcat_mode_stays_none() -> None:
     candidates = identify("$algoritmo-desconhecido$parametros$hash")
 
     assert candidates[0].hashcat_mode is None
+
+
+@pytest.mark.parametrize(
+    ("sample", "expected_difficulty"),
+    [
+        ("5f4dcc3b5aa765d61d8327deb882cf99", "trivial"),
+        ("$1$salt$hash", "moderate"),
+        ("$2b$12$EixZaYVK1fsbw1ZfbX3OXe", "hard"),
+        ("$argon2id$v=19$m=65536,t=3,p=4$sal$hash", "very_hard"),
+    ],
+)
+def test_crack_difficulty_is_attached_to_known_algorithms(
+    sample: str,
+    expected_difficulty: str,
+) -> None:
+    """A dificuldade estimada acompanha o custo geral de cada algoritmo."""
+    candidates = identify(sample)
+
+    assert candidates[0].crack_difficulty == expected_difficulty
+
+
+def test_non_hash_format_has_no_crack_difficulty() -> None:
+    """Formatos que não são hashes não recebem dificuldade de quebra."""
+    candidates = identify("https://insper.edu.br/")
+
+    assert candidates[0].crack_difficulty is None
 
 
 def test_cli_suggests_hashcat_command_for_main_candidate(
