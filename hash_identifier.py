@@ -67,9 +67,12 @@ import sys
 # dados pequeno e imutável sem escrever código repetitivo de `__init__`.
 from dataclasses import asdict, dataclass
 
+# Biblioteca padrão: representa o caminho recebido pela opção `--file`.
+from pathlib import Path
+
 # Biblioteca padrão: uma dica de tipo que fixa um valor a um pequeno conjunto
 # fixo de strings (aqui: "high", "medium", "low"). O Mypy captura erros de digitação.
-from typing import Literal
+from typing import Literal, TextIO
 
 # Terceiros (rich): o impressor que desenha a tabela no terminal,
 # com suporte a cores e Unicode.
@@ -446,6 +449,30 @@ def identify(raw_input: str) -> list[HashCandidate]:
     return []
 
 
+IdentificationResult = tuple[str, list[HashCandidate]]
+
+
+def _read_nonempty_lines(stream: TextIO) -> list[str]:
+    """Lê um stream de texto, remove espaços e ignora linhas vazias."""
+    return [line.strip() for line in stream if line.strip()]
+
+
+def _identify_many(raw_inputs: list[str]) -> list[IdentificationResult]:
+    """Identifica várias entradas e reutiliza resultados de valores repetidos."""
+    cache: dict[str, list[HashCandidate]] = {}
+    results: list[IdentificationResult] = []
+
+    for raw_input in raw_inputs:
+        text = raw_input.strip()
+        if not text:
+            continue
+        if text not in cache:
+            cache[text] = identify(text)
+        results.append((text, cache[text]))
+
+    return results
+
+
 # =============================================================================
 # CLI — argparse + uma tabela rich
 # =============================================================================
@@ -464,7 +491,13 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "hash",
+        nargs="?",
         help="A string de hash a identificar (envolva em aspas simples se contiver $).",
+    )
+    parser.add_argument(
+        "--file",
+        type=Path,
+        help="Lê uma entrada por linha de um arquivo UTF-8.",
     )
     parser.add_argument(
         "--top",
@@ -514,6 +547,41 @@ def _render_table(
     console.print(table)
 
 
+def _render_batch(
+    results: list[IdentificationResult],
+    top: int,
+    console: Console,
+) -> None:
+    """Imprime uma tabela compacta para várias entradas."""
+    table = Table(title="Identificação em lote", title_style="bold cyan")
+    table.add_column("entrada", style="bold white")
+    table.add_column("algoritmo", style="bold white", no_wrap=True)
+    table.add_column("confiança", no_wrap=True)
+    table.add_column("motivo", style="dim")
+
+    confidence_colors: dict[Confidence, str] = {
+        "high": "green",
+        "medium": "yellow",
+        "low": "cyan",
+    }
+    for raw_input, candidates in results:
+        trimmed = candidates[:top]
+        if not trimmed:
+            table.add_row(raw_input, "não identificado", "-", "nenhuma regra correspondeu")
+            continue
+
+        for index, candidate in enumerate(trimmed):
+            color = confidence_colors[candidate.confidence]
+            table.add_row(
+                raw_input if index == 0 else "",
+                candidate.algorithm,
+                f"[{color}]{candidate.confidence}[/{color}]",
+                candidate.reason,
+            )
+
+    console.print(table)
+
+
 def main() -> int:
     """
     Ponto de entrada da CLI — retorna um código de saída (0 = ok, 1 = nada encontrado).
@@ -521,8 +589,49 @@ def main() -> int:
     parser = _build_argument_parser()
     args = parser.parse_args()
     console = Console()
+    raw_inputs: list[str] = []
 
-    candidates = identify(args.hash)
+    if args.hash is not None and args.file is not None:
+        parser.error("use um hash posicional ou --file, não os dois")
+
+    if args.hash is not None:
+        raw_inputs = [args.hash]
+    elif args.file is not None:
+        try:
+            with args.file.open("r", encoding="utf-8") as input_file:
+                raw_inputs = _read_nonempty_lines(input_file)
+        except OSError as error:
+            parser.error(f"não foi possível ler `{args.file}`: {error}")
+    elif not sys.stdin.isatty():
+        raw_inputs = _read_nonempty_lines(sys.stdin)
+    else:
+        parser.error("informe um hash, use --file ou envie dados pelo stdin")
+
+    results = _identify_many(raw_inputs)
+
+    if not results:
+        console.print("[red]Nenhuma entrada não vazia foi fornecida.[/red]")
+        return 1
+
+    if len(results) > 1:
+        if args.json:
+            batch_payload = {
+                "results": [
+                    {
+                        "input": raw_input,
+                        "candidates": [
+                            asdict(candidate) for candidate in candidates[: args.top]
+                        ],
+                    }
+                    for raw_input, candidates in results
+                ]
+            }
+            print(json.dumps(batch_payload, ensure_ascii=False, indent=2))
+        else:
+            _render_batch(results, args.top, console)
+        return 1 if any(not candidates for _, candidates in results) else 0
+
+    raw_input, candidates = results[0]
 
     if not candidates:
         console.print(
@@ -536,14 +645,14 @@ def main() -> int:
     trimmed = candidates[: args.top]
 
     if args.json:
-        payload = {
-            "input": args.hash.strip(),
+        single_payload = {
+            "input": raw_input,
             "candidates": [asdict(candidate) for candidate in trimmed],
         }
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(single_payload, ensure_ascii=False, indent=2))
         return 0
 
-    _render_table(args.hash, trimmed, console)
+    _render_table(raw_input, trimmed, console)
 
     # Dica útil — direciona o usuário para o cracker após a identificação.
     if trimmed[0].confidence == "high":

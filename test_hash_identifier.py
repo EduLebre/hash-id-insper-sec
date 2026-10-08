@@ -64,8 +64,14 @@ no topo do ranking.
 #   - `PREFIX_RULES` — a tabela de busca de prefixos (usada pelo teste
 #                      parametrizado "every row is covered" no final deste arquivo)
 
+# Biblioteca padrão: simula dados recebidos pelo stdin.
+import io
+
 # Biblioteca padrão: valida que a saída `--json` pode ser interpretada como JSON.
 import json
+
+# Biblioteca padrão: tipo usado pelo fixture temporário de arquivo do pytest.
+from pathlib import Path
 
 # Terceiros: o próprio executor de testes. Também precisamos importá-lo aqui
 # para podermos usar seu decorador `@pytest.mark.parametrize` abaixo.
@@ -73,7 +79,13 @@ import pytest
 
 # Local: nosso próprio módulo. Extraímos as peças públicas sob teste —
 # a tabela de regras de prefixo, a dataclass de resultado e a função de entrada.
-from hash_identifier import PREFIX_RULES, HashCandidate, identify, main
+from hash_identifier import (
+    PREFIX_RULES,
+    HashCandidate,
+    _identify_many,
+    identify,
+    main,
+)
 
 
 def test_json_output_is_valid_and_contains_candidates(
@@ -91,6 +103,71 @@ def test_json_output_is_valid_and_contains_candidates(
     assert payload["input"] == sample
     assert payload["candidates"][0]["algorithm"] == "MD5"
     assert payload["candidates"][0]["confidence"] == "medium"
+
+
+def test_file_input_returns_batch_json(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """A opção --file processa uma entrada não vazia por linha."""
+    samples = [
+        "5f4dcc3b5aa765d61d8327deb882cf99",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ]
+    input_file = tmp_path / "hashes.txt"
+    input_file.write_text(f"{samples[0]}\n\n{samples[1]}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv", ["hashid", "--json", "--file", str(input_file)]
+    )
+
+    exit_code = main()
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert [result["input"] for result in payload["results"]] == samples
+    assert payload["results"][0]["candidates"][0]["algorithm"] == "MD5"
+    assert payload["results"][1]["candidates"][0]["algorithm"] == "SHA-256"
+
+
+def test_stdin_input_returns_batch_json(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Sem argumento ou --file, a CLI lê uma entrada por linha do stdin."""
+    samples = [
+        "5f4dcc3b5aa765d61d8327deb882cf99",
+        "$pbkdf2$iteracoes$salt$hash",
+    ]
+    monkeypatch.setattr("sys.argv", ["hashid", "--json"])
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n".join(samples)))
+
+    exit_code = main()
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert [result["input"] for result in payload["results"]] == samples
+
+
+def test_batch_identification_caches_duplicate_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Entradas repetidas são identificadas uma única vez durante o lote."""
+    sample = "5f4dcc3b5aa765d61d8327deb882cf99"
+    call_count = 0
+    original_identify = identify
+
+    def counted_identify(text: str) -> list[HashCandidate]:
+        nonlocal call_count
+        call_count += 1
+        return original_identify(text)
+
+    monkeypatch.setattr("hash_identifier.identify", counted_identify)
+
+    results = _identify_many([sample, sample])
+
+    assert len(results) == 2
+    assert call_count == 1
 
 # =============================================================================
 # Correspondências de prefixo (alta confiança)
