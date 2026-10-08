@@ -103,6 +103,38 @@ def test_json_output_is_valid_and_contains_candidates(
     assert payload["input"] == sample
     assert payload["candidates"][0]["algorithm"] == "MD5"
     assert payload["candidates"][0]["confidence"] == "medium"
+    assert payload["candidates"][0]["hashcat_mode"] == 0
+
+
+def test_known_hashcat_mode_is_attached_to_candidate() -> None:
+    """Um algoritmo conhecido recebe o modo numérico correspondente."""
+    candidates = identify("$2b$12$EixZaYVK1fsbw1ZfbX3OXe")
+
+    assert candidates[0].algorithm == "bcrypt"
+    assert candidates[0].hashcat_mode == 3200
+
+
+def test_unknown_hashcat_mode_stays_none() -> None:
+    """Um formato sem mapeamento não recebe um modo inventado."""
+    candidates = identify("$algoritmo-desconhecido$parametros$hash")
+
+    assert candidates[0].hashcat_mode is None
+
+
+def test_cli_suggests_hashcat_command_for_main_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A saída humana inclui o comando do hashcat para o candidato principal."""
+    sample = "5f4dcc3b5aa765d61d8327deb882cf99"
+    monkeypatch.setattr("sys.argv", ["hashid", sample])
+
+    exit_code = main()
+    output = capsys.readouterr().out
+    normalized_output = " ".join(output.split())
+
+    assert exit_code == 0
+    assert f"hashcat -m 0 -a 0 '{sample}' wordlist.txt" in normalized_output
 
 
 def test_file_input_returns_batch_json(
@@ -117,9 +149,7 @@ def test_file_input_returns_batch_json(
     ]
     input_file = tmp_path / "hashes.txt"
     input_file.write_text(f"{samples[0]}\n\n{samples[1]}\n", encoding="utf-8")
-    monkeypatch.setattr(
-        "sys.argv", ["hashid", "--json", "--file", str(input_file)]
-    )
+    monkeypatch.setattr("sys.argv", ["hashid", "--json", "--file", str(input_file)])
 
     exit_code = main()
     payload = json.loads(capsys.readouterr().out)
@@ -168,6 +198,7 @@ def test_batch_identification_caches_duplicate_inputs(
 
     assert len(results) == 2
     assert call_count == 1
+
 
 # =============================================================================
 # Correspondências de prefixo (alta confiança)
@@ -483,6 +514,33 @@ def test_base64_blob_is_called_out_as_not_a_hash() -> None:
 
     assert candidates
     assert "Base64" in candidates[0].algorithm
+
+
+@pytest.mark.parametrize(
+    ("sample", "expected_format"),
+    [
+        ("https://insper.edu.br/", "URL"),
+        ("0x52908400098527886E0F7030069857D2E4169EE7", "Hex com prefixo 0x"),
+        ("JBSWY3DPEHPK3PXP", "Base32"),
+        ("1BoatSLRHtKNngkdXEeobR76b53LETtpyT", "Base58"),
+    ],
+)
+def test_additional_non_hash_formats_are_recognized(
+    sample: str,
+    expected_format: str,
+) -> None:
+    """Formatos confundidos com hashes são identificados com baixa confiança."""
+    candidates = identify(sample)
+
+    assert candidates
+    assert expected_format in candidates[0].algorithm
+    assert candidates[0].confidence == "low"
+    assert candidates[0].hashcat_mode is None
+
+
+def test_short_text_is_not_mistaken_for_base_encoding() -> None:
+    """O limite mínimo evita classificar palavras curtas como Base32 ou Base58."""
+    assert identify("HELLOWORLD") == []
 
 
 def test_atlassian_pbkdf2_prefix_is_recognized() -> None:

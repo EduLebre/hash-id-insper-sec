@@ -93,6 +93,41 @@ from rich.table import Table
 Confidence = Literal["high", "medium", "low"]
 
 
+# Nome usado pelo identificador -> modo numérico aceito pelo hashcat.
+# Nem todo candidato possui um modo direto; nesses casos, o valor fica como None.
+HASHCAT_MODES: dict[str, int] = {
+    "MD5": 0,
+    "SHA-1": 100,
+    "MySQL323": 200,
+    "MySQL5": 300,
+    "phpass": 400,
+    "MD5 crypt": 500,
+    "MD4": 900,
+    "NTLM": 1000,
+    "SHA-224": 1300,
+    "SHA-256": 1400,
+    "DES crypt": 1500,
+    "Apache MD5-crypt": 1600,
+    "SHA-512": 1700,
+    "SHA-512 crypt": 1800,
+    "bcrypt": 3200,
+    "NetNTLMv1": 5500,
+    "NetNTLMv2": 5600,
+    "Whirlpool": 6100,
+    "SHA-256 crypt": 7400,
+    "Drupal 7 (SHA-512)": 7900,
+    "scrypt": 8900,
+    "Django PBKDF2-SHA256": 10000,
+    "SHA-384": 10800,
+    "PBKDF2-SHA1 (Atlassian)": 12001,
+    "SHA3-224": 17300,
+    "SHA3-256": 17400,
+    "SHA3-384": 17500,
+    "SHA3-512": 17600,
+    "BLAKE2s-256": 31000,
+}
+
+
 # =============================================================================
 # Tipo de Resultado — o que identify() retorna para cada palpite
 # =============================================================================
@@ -118,11 +153,28 @@ class HashCandidate:
     reason
         Explicação curta exibida ao lado do nome do algoritmo. Mantém a
         saída depurável — o usuário pode ver POR QUE cada palpite foi feito.
+    hashcat_mode
+        Número usado pela opção `-m` do hashcat, quando houver modo conhecido.
     """
 
     algorithm: str
     confidence: Confidence
     reason: str
+    hashcat_mode: int | None = None
+
+
+def _candidate(
+    algorithm: str,
+    confidence: Confidence,
+    reason: str,
+) -> HashCandidate:
+    """Cria um candidato e anexa o modo do hashcat quando ele for conhecido."""
+    return HashCandidate(
+        algorithm=algorithm,
+        confidence=confidence,
+        reason=reason,
+        hashcat_mode=HASHCAT_MODES.get(algorithm),
+    )
 
 
 # =============================================================================
@@ -189,6 +241,14 @@ PREFIX_RULES: list[tuple[str, str, str]] = [
 
 # Caracteres hex são 0-9 mais a-f (ou A-F se maiúsculos)
 HEX_CHARSET: frozenset[str] = frozenset("0123456789abcdefABCDEF")
+
+# Alfabetos usados para reconhecer codificações confundidas com hashes.
+_BASE32_CHARSET: frozenset[str] = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+_BASE58_CHARSET: frozenset[str] = frozenset(
+    "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+)
+_BASE32_MIN_LENGTH = 16
+_BASE58_MIN_LENGTH = 26
 
 # Conjunto de caracteres hex apenas maiúsculos — alguns formatos (MySQL5) APENAS
 # emitem hex maiúsculo. Verificar isso nos permite rejeitar strings minúsculas
@@ -299,8 +359,8 @@ def identify(raw_input: str) -> list[HashCandidate]:
        O primeiro item recebe confiança MÉDIA; o resto BAIXA.
     4. Se a entrada tiver o formato `$<algo>$...` mas nenhuma regra de prefixo
        correspondeu, recorre a uma correspondência genérica de string PHC (confiança BAIXA).
-    5. Se a entrada parecer um JWT (`eyJ...`) ou um blob base64 (contém `+`, `/`, ou `=`),
-       informa isso com confiança BAIXA — estes não são hashes.
+    5. Procura formatos confundidos com hashes: JWT, URL, hexadecimal com
+       prefixo `0x`, Base32, Base58 ou Base64. Todos recebem confiança BAIXA.
     6. Se nada corresponder, retorna uma lista vazia.
 
     Parâmetros
@@ -326,7 +386,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
     for prefix, algorithm, note in PREFIX_RULES:
         if text.startswith(prefix):
             return [
-                HashCandidate(
+                _candidate(
                     algorithm=algorithm,
                     confidence="high",
                     reason=f"prefixo `{prefix}` — {note}",
@@ -345,7 +405,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
         #   usuario :: dominio : desafio : hmac(32 hex) : blob(>=32 hex)
         if len(parts) >= 6 and len(parts[4]) == 32 and _is_hex(parts[4]):
             return [
-                HashCandidate(
+                _candidate(
                     algorithm="NetNTLMv2",
                     confidence="high",
                     reason="formato usuario::dominio:desafio:hmac(32 hex):blob",
@@ -355,7 +415,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
         #   usuario :: dominio : lmhash(48 hex) : nthash(48 hex) : desafio
         if len(parts) >= 6 and len(parts[3]) == 48 and _is_hex(parts[3]):
             return [
-                HashCandidate(
+                _candidate(
                     algorithm="NetNTLMv1",
                     confidence="high",
                     reason="formato usuario::dominio:lm(48 hex):nt(48 hex):desafio",
@@ -365,7 +425,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
     # MySQL5 — literal `*` + 40 caracteres hex maiúsculos
     if _is_mysql5(text):
         return [
-            HashCandidate(
+            _candidate(
                 algorithm="MySQL5",
                 confidence="high",
                 reason="começa com `*` seguido por 40 caracteres hex maiúsculos",
@@ -375,7 +435,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
     # DES crypt tradicional de 13 caracteres — formato legado /etc/passwd
     if _is_descrypt(text):
         return [
-            HashCandidate(
+            _candidate(
                 algorithm="DES crypt",
                 confidence="medium",
                 reason="13 caracteres em `./0-9A-Za-z` — formato legado /etc/passwd",
@@ -396,7 +456,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
                 else "também possível para este comprimento"
             )
             candidates.append(
-                HashCandidate(
+                _candidate(
                     algorithm=algorithm,
                     confidence=confidence,
                     reason=f"{len(text)} caracteres hex — {label}",
@@ -416,7 +476,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
             # mais `-` e `_`.
             if algo_name and all(c.isalnum() or c in "-_" for c in algo_name):
                 return [
-                    HashCandidate(
+                    _candidate(
                         algorithm=f"String PHC ({algo_name})",
                         confidence="low",
                         reason=f"formato `${algo_name}$...` — PHC genérico, sem regra específica",
@@ -424,21 +484,53 @@ def identify(raw_input: str) -> list[HashCandidate]:
                 ]
 
     # ----- Passo 5: dicas de formatos que não são hashes -----
-    # Iniciantes costumam colar JWTs ou blobs base64 em um identificador de hash.
+    # Iniciantes costumam colar outros formatos em um identificador de hash.
     if text.startswith("eyJ"):
         # JWTs sempre começam com `eyJ` porque seu cabeçalho JSON `{"alg":...}`
         # em base64 começa com esses três caracteres.
         return [
-            HashCandidate(
+            _candidate(
                 algorithm="JWT (não é um hash)",
                 confidence="low",
                 reason='prefixo `eyJ` é o base64 de `{"` — JWT, não é um hash',
             )
         ]
+    if text.startswith(("http://", "https://")):
+        return [
+            _candidate(
+                algorithm="URL (não é um hash)",
+                confidence="low",
+                reason="começa com `http://` ou `https://` — endereço web",
+            )
+        ]
+    if text.startswith("0x") and _is_hex(text[2:]):
+        return [
+            _candidate(
+                algorithm="Hex com prefixo 0x (não é um hash)",
+                confidence="low",
+                reason="prefixo `0x` — pode ser endereço Ethereum ou de memória",
+            )
+        ]
+    if len(text) >= _BASE32_MIN_LENGTH and all(c in _BASE32_CHARSET for c in text):
+        return [
+            _candidate(
+                algorithm="Base32 (não é um hash)",
+                confidence="low",
+                reason="alfabeto A-Z e 2-7 — possível segredo TOTP ou endereço Tor",
+            )
+        ]
+    if len(text) >= _BASE58_MIN_LENGTH and all(c in _BASE58_CHARSET for c in text):
+        return [
+            _candidate(
+                algorithm="Base58 (não é um hash)",
+                confidence="low",
+                reason="alfabeto Base58 — possível endereço Bitcoin ou hash IPFS",
+            )
+        ]
     if any(c in text for c in "+/=") and len(text) > 8:
         # Hashes hex NUNCA contêm `+`, `/`, ou `=`.
         return [
-            HashCandidate(
+            _candidate(
                 algorithm="Blob Base64 (não é um hash)",
                 confidence="low",
                 reason="contém caracteres exclusivos de base64 (`+`, `/`, `=`)",
@@ -528,6 +620,7 @@ def _render_table(
         show_lines=False,
     )
     table.add_column("algoritmo", style="bold white", no_wrap=True)
+    table.add_column("hashcat", no_wrap=True)
     table.add_column("confiança", no_wrap=True)
     table.add_column("motivo", style="dim")
 
@@ -541,6 +634,7 @@ def _render_table(
         color = confidence_colors[candidate.confidence]
         table.add_row(
             candidate.algorithm,
+            str(candidate.hashcat_mode) if candidate.hashcat_mode is not None else "-",
             f"[{color}]{candidate.confidence}[/{color}]",
             candidate.reason,
         )
@@ -556,6 +650,7 @@ def _render_batch(
     table = Table(title="Identificação em lote", title_style="bold cyan")
     table.add_column("entrada", style="bold white")
     table.add_column("algoritmo", style="bold white", no_wrap=True)
+    table.add_column("hashcat", no_wrap=True)
     table.add_column("confiança", no_wrap=True)
     table.add_column("motivo", style="dim")
 
@@ -567,7 +662,13 @@ def _render_batch(
     for raw_input, candidates in results:
         trimmed = candidates[:top]
         if not trimmed:
-            table.add_row(raw_input, "não identificado", "-", "nenhuma regra correspondeu")
+            table.add_row(
+                raw_input,
+                "não identificado",
+                "-",
+                "-",
+                "nenhuma regra correspondeu",
+            )
             continue
 
         for index, candidate in enumerate(trimmed):
@@ -575,6 +676,9 @@ def _render_batch(
             table.add_row(
                 raw_input if index == 0 else "",
                 candidate.algorithm,
+                str(candidate.hashcat_mode)
+                if candidate.hashcat_mode is not None
+                else "-",
                 f"[{color}]{candidate.confidence}[/{color}]",
                 candidate.reason,
             )
@@ -654,11 +758,12 @@ def main() -> int:
 
     _render_table(raw_input, trimmed, console)
 
-    # Dica útil — direciona o usuário para o cracker após a identificação.
-    if trimmed[0].confidence == "high":
+    # Dica útil — fornece um comando para testar o candidato principal.
+    if trimmed[0].hashcat_mode is not None:
         console.print(
-            "\n[dim]Próximo passo: tente o modo de quebra correspondente "
-            "(veja ../../beginner/hash-cracker).[/dim]"
+            "\n[dim]Próximo passo: "
+            f"hashcat -m {trimmed[0].hashcat_mode} -a 0 "
+            f"'{raw_input}' wordlist.txt[/dim]"
         )
 
     return 0
