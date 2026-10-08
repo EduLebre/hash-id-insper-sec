@@ -143,6 +143,12 @@ Nenhum compilador, biblioteca de sistema ou acesso à rede é necessário.
 - [Name That Hash](https://nth.skerritt.blog/) — ferramenta online de identificação de hashes
 - [Crypto 101](https://www.crypto101.io/) — introdução a criptografia aplicada
 
+## Limitações conhecidas
+
+A identificação é baseada no formato da entrada e pode retornar mais de um
+candidato. Veja as [limitações conhecidas](docs/limitations.md) para entender os
+casos em que não é possível determinar o algoritmo com certeza.
+
 ## 🧭 Next Step
 
 Após concluir `Hash_ID`, você pode avançar para o projeto em equipe do mesmo ramo: [`Hash_Cracker`](../../Team/Hash_Cracker/README.md) — quebra de hashes com ataques de dicionário, brute force e regras.
