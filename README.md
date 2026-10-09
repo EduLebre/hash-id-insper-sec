@@ -60,6 +60,14 @@ just run -- 5f4dcc3b5aa765d61d8327deb882cf99
 # MD5 | modo 0 | trivial | confiança medium
 ```
 
+No Windows, use o Git Bash e force o Bash como shell:
+
+```bash
+just --shell bash --shell-arg -uc test
+just --shell bash --shell-arg -uc lint
+just --shell bash --shell-arg -uc run -- 5f4dcc3b5aa765d61d8327deb882cf99
+```
+
 Teste com os [hashes de demonstração](#hashes-de-demonstração) abaixo.
 
 ## 🎬 Demo
