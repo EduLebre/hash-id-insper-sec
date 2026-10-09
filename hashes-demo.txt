@@ -1,0 +1,5 @@
+5f4dcc3b5aa765d61d8327deb882cf99
+$apr1$JlOdSlVe$ipa1mTAv3LFRBHHzqaIaH/
+$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQNQy.uK4Of2T7G.VHvgvWK
+$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG
+https://insper.edu.br/
